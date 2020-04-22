@@ -14,10 +14,10 @@ public class NodeTest {
         Node a = new Node("a", "a", NodeType.Package);
         Node b = new Node("b", "b", NodeType.Type);
         Node c = new Node("c", "c", NodeType.Type);
-        Edge e = new Edge(NodeRef.of(a), NodeRef.of(b), EdgeType.Owns);
-        Edge f = new Edge(NodeRef.of(a), NodeRef.of(c), EdgeType.Owns);
+        Edge e = new Edge(NodeRef.of(a), NodeRef.of(b), EdgeType.Contains);
+        Edge f = new Edge(NodeRef.of(b), NodeRef.of(c), EdgeType.Contains);
         a.addOutboundEdge(e);
-        a.addOutboundEdge(f);
+        b.addOutboundEdge(f);
 
         Map<String, Integer> visitCounts = new HashMap<>();
         visitCounts.put("a", 0);

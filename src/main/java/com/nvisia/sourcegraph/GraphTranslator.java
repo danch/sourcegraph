@@ -68,7 +68,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         var containingNode = containerNodeStack.peek();
         var fqn = containingNode.getName()+"."+className;
         var classNode = new Node(fqn, fqn, NodeType.Type);
-        Edge containment = new Edge(NodeRef.of(containingNode), NodeRef.of(classNode), EdgeType.Owns);
+        Edge containment = new Edge(NodeRef.of(containingNode), NodeRef.of(classNode), EdgeType.Contains);
         containingNode.addOutboundEdge(containment);
         containerNodeStack.push(classNode);
     }
@@ -84,7 +84,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         Node parentNode = containerNodeStack.peek();
         String fqn = parentNode.getName()+"."+name;
         Node myNode = new Node(fqn, fqn, NodeType.Method);
-        Edge containment = new Edge(NodeRef.of(parentNode), NodeRef.of(myNode), EdgeType.Owns);
+        Edge containment = new Edge(NodeRef.of(parentNode), NodeRef.of(myNode), EdgeType.Contains);
         parentNode.addOutboundEdge(containment);
         containerNodeStack.push(myNode);
     }

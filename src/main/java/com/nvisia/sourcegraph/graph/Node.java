@@ -24,11 +24,8 @@ public class Node implements Comparable<Node> {
     }
 
     public void preOrderTraverse(BiConsumer<Optional<EdgeType>, NodeRef> visitor) {
-        visitor.accept(Optional.empty(), NodeRef.of(this));
         var nodeSet = new HashSet<NodeRef>();
-        for (var edge : outboundEdges) {
-            doPreOrderTraverse(Optional.of(edge), visitor, nodeSet);
-        }
+        doPreOrderTraverse(Optional.of(new Edge(NodeRef.of(""), NodeRef.of(this), EdgeType.Contains)), visitor, nodeSet);
     }
     private void doPreOrderTraverse(Optional<Edge> inEdge, BiConsumer<Optional<EdgeType>, NodeRef> visitor, Set<NodeRef> alreadyVisited) {
         inEdge.ifPresent(edge -> {
@@ -38,7 +35,7 @@ public class Node implements Comparable<Node> {
             visitor.accept(Optional.of(edge.getType()), edge.getTo());
             alreadyVisited.add(edge.getTo());
             for (var childEdge : outboundEdges) {
-                childEdge.getTo().getNode().ifPresent(node -> node.doPreOrderTraverse(Optional.of(edge), visitor, alreadyVisited));
+                childEdge.getTo().getNode().ifPresent(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited));
             }
         });
     }

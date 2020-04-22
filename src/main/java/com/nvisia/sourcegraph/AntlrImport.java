@@ -16,7 +16,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class AntlrImport {
-    public static List<String> getAllJavaFiles(Path inputDir) {
+    static List<String> getAllJavaFiles(Path inputDir) {
         File[] theseFiles = inputDir.toFile().listFiles((File file) ->
             file.isDirectory() || file.getName().endsWith("java"));
         List<String> fileNames = new LinkedList<String>();

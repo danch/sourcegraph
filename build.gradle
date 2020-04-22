@@ -6,7 +6,11 @@ plugins {
 group 'sourcegraph'
 version '1.0-SNAPSHOT'
 
-sourceCompatibility = 1.13
+sourceCompatibility = 1.11
+compileJava   {
+  sourceCompatibility = 11
+  targetCompatibility = 11
+}
 
 repositories {
     mavenCentral()

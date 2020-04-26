@@ -12,10 +12,13 @@ import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
 public class AntlrImport {
+    public static int SPACES_PER_TREE_LEVEL = 2;
+
     static List<String> getAllJavaFiles(Path inputDir) {
         File[] theseFiles = inputDir.toFile().listFiles((File file) ->
             file.isDirectory() || file.getName().endsWith("java"));
@@ -49,7 +52,7 @@ public class AntlrImport {
         List<Node> topLevelNodes = translator.getTopLevelNodes();
         var typeCache = translator.getTypeCache();
         for (Node top : topLevelNodes) {
-            top.preOrderTraverse((maybeEdgeType, nodeRef) -> {
+            top.preOrderTraverse((maybeEdgeType, nodeRef, level) -> {
                 nodeRef.getNode().map(node -> {
                     node.getOutboundEdges().forEach(edge -> {
                         edge.resolveNodeRefs(typeCache);
@@ -58,8 +61,16 @@ public class AntlrImport {
                 });
             });
             top.preOrderTraverse(
-                    (maybeEdgeType, node) -> System.out.println(maybeEdgeType.map(Enum::toString).orElse("") + "->" + node.toString())
+                    (maybeEdgeType, node, level) ->
+                            System.out.println(nSpaces(level*SPACES_PER_TREE_LEVEL)+ maybeEdgeType.map(Enum::toString).orElse("") + "->" + node.toString())
             );
         }
+    }
+
+    private static String nSpaces(int i) {
+        //yeah, could be cached, but this is temporary
+        char[] raw = new char[i];
+        Arrays.fill(raw, ' ');
+        return new String(raw);
     }
 }

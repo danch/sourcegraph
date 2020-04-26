@@ -23,22 +23,22 @@ public class Node implements Comparable<Node> {
         return type.toString()+":"+name;
     }
 
-    public void preOrderTraverse(BiConsumer<Optional<EdgeType>, NodeRef> visitor) {
+    public void preOrderTraverse(NodeVisitor visitor) {
         var nodeSet = new HashSet<NodeRef>();
-        doPreOrderTraverse(Optional.of(new Edge(NodeRef.of(""), NodeRef.of(this), EdgeType.Contains)), visitor, nodeSet);
+        doPreOrderTraverse(Optional.of(new Edge(NodeRef.of(""), NodeRef.of(this), EdgeType.Contains)), visitor, nodeSet, 0);
     }
-    private void doPreOrderTraverse(Optional<Edge> inEdge, BiConsumer<Optional<EdgeType>, NodeRef> visitor, Set<NodeRef> alreadyVisited) {
+    private void doPreOrderTraverse(Optional<Edge> inEdge, NodeVisitor visitor, Set<NodeRef> alreadyVisited, int level) {
         inEdge.ifPresent(edge -> {
             if (alreadyVisited.contains(edge.getTo())) {
                 return;
             }
-            visitor.accept(Optional.of(edge.getType()), edge.getTo());
+            visitor.visitEdge(Optional.of(edge.getType()), edge.getTo(), level);
             alreadyVisited.add(edge.getTo());
             for (var childEdge : outboundEdges) {
                 //Hack/workaround for the fact that the post-processing resolution of types (from local to fully qualified) leaves
                 //  edges to nowhere in the case of types outside the system (like java.lang.*)
-                childEdge.getTo().getNode().ifPresentOrElse(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited),
-                        () -> visitor.accept(Optional.of(childEdge.getType()), childEdge.getTo()));
+                childEdge.getTo().getNode().ifPresentOrElse(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited, level+1),
+                        () -> visitor.visitEdge(Optional.of(childEdge.getType()), childEdge.getTo(), level+1));
             }
         });
     }

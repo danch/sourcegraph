@@ -1,12 +1,24 @@
 package com.nvisia.sourcegraph.test.simple;
 
 public class Main {
-    static private String test;
+
+    static class InnerClass {
+        String test;
+        public InnerClass(String value) {
+            test = value;
+        }
+        public void doNothing() {
+            System.out.println("Hallo "+test);
+        }
+    }
+    public InnerClass innerClass;
+
+    public Main(InnerClass innerClass) {
+        this.innerClass = innerClass;
+    }
 
     public static void main(String[] args) {
-        System.out.println("Hallo World");
-    }
-    public static void doNothing() {
-        ;
+        Main main = new Main(new InnerClass("World"));
+        main.innerClass.doNothing();
     }
 }

@@ -93,4 +93,41 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void exitMethodDeclaration(Java9Parser.MethodDeclarationContext ctx) {
         containerNodeStack.pop();
     }
+
+    @Override
+    public void enterFieldDeclaration(Java9Parser.FieldDeclarationContext ctx) {
+        var declarations = ctx.variableDeclaratorList().variableDeclarator();
+        var containingNode = containerNodeStack.peek();
+        for (var decl : declarations) {
+            var id = decl.variableDeclaratorId().identifier().Identifier();
+            var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Field);
+            var containsEdge = new Edge(NodeRef.of(containingNode), NodeRef.of(child), EdgeType.Contains);
+            containingNode.addOutboundEdge(containsEdge);
+
+            var typeContext = ctx.unannType();
+            var typeNodeRef = getTypeNodeRef(typeContext);
+            var fieldNodeRef = NodeRef.of(child);
+            var typeOfEdge = new Edge(fieldNodeRef, typeNodeRef, EdgeType.References);
+            child.addOutboundEdge(typeOfEdge);
+        }
+
+    }
+
+    private NodeRef getTypeNodeRef(Java9Parser.UnannTypeContext typeContext) {
+        var refType = typeContext.unannReferenceType();
+        if (refType != null) {
+            var type = refType.unannClassOrInterfaceType();
+            if (type != null) {
+                var typeName = type.getText();
+                return NodeRef.of(typeName);
+            }
+        }
+        return null;
+    }
+
+
+    @Override
+    public void exitFieldDeclaration(Java9Parser.FieldDeclarationContext ctx) {
+
+    }
 }

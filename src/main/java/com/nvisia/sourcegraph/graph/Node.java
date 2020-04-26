@@ -35,7 +35,10 @@ public class Node implements Comparable<Node> {
             visitor.accept(Optional.of(edge.getType()), edge.getTo());
             alreadyVisited.add(edge.getTo());
             for (var childEdge : outboundEdges) {
-                childEdge.getTo().getNode().ifPresent(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited));
+                //Hack/workaround for the fact that the post-processing resolution of types (from local to fully qualified) leaves
+                //  edges to nowhere in the case of types outside the system (like java.lang.*)
+                childEdge.getTo().getNode().ifPresentOrElse(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited),
+                        () -> visitor.accept(Optional.of(childEdge.getType()), childEdge.getTo()));
             }
         });
     }

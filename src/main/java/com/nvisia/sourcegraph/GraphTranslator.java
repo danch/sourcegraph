@@ -125,9 +125,19 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         return null;
     }
 
-
     @Override
-    public void exitFieldDeclaration(Java9Parser.FieldDeclarationContext ctx) {
+    public void enterLocalVariableDeclaration(Java9Parser.LocalVariableDeclarationContext ctx) {
+        NodeRef variableType = getTypeNodeRef(ctx.unannType());
+        var containingNode = containerNodeStack.peek();
+        for (var declarator : ctx.variableDeclaratorList().variableDeclarator()) {
+            var id = declarator.variableDeclaratorId().identifier().Identifier();
+            var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Variable);
+            var containsEdge = new Edge(NodeRef.of(containingNode), NodeRef.of(child), EdgeType.Contains);
+            containingNode.addOutboundEdge(containsEdge);
 
+            var fieldNodeRef = NodeRef.of(child);
+            var typeOfEdge = new Edge(fieldNodeRef, variableType, EdgeType.References);
+            child.addOutboundEdge(typeOfEdge);
+        }
     }
 }

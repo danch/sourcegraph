@@ -8,7 +8,8 @@ public class Main {
             test = value;
         }
         public void doNothing() {
-            System.out.println("Hallo "+test);
+            String localVariable = "Hallo ";
+            System.out.println(localVariable+test);
         }
     }
     public InnerClass innerClass;

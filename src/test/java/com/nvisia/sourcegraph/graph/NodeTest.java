@@ -23,7 +23,7 @@ public class NodeTest {
         visitCounts.put("a", 0);
         visitCounts.put("b", 0);
         visitCounts.put("c", 0);
-        a.preOrderTraverse((maybeEdgeType, nodeRef) -> {
+        a.preOrderTraverse((maybeEdgeType, nodeRef, level) -> {
             String name = nodeRef.getNode().map(Node::getName).orElse("");
             Integer oldValue = visitCounts.get(name);
             Integer newValue = oldValue+1;

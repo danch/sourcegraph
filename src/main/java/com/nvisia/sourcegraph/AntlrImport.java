@@ -2,6 +2,7 @@ package com.nvisia.sourcegraph;
 
 import com.nvisia.sourcegraph.antlr.Java9Lexer;
 import com.nvisia.sourcegraph.antlr.Java9Parser;
+import com.nvisia.sourcegraph.graph.EdgeType;
 import com.nvisia.sourcegraph.graph.Node;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 public class AntlrImport {
     public static int SPACES_PER_TREE_LEVEL = 2;
@@ -52,7 +54,7 @@ public class AntlrImport {
         List<Node> topLevelNodes = translator.getTopLevelNodes();
         var typeCache = translator.getTypeCache();
         for (Node top : topLevelNodes) {
-            top.preOrderTraverse((maybeEdgeType, nodeRef, level) -> {
+            top.preOrderTraverse(Optional.of(EdgeType.Contains), (maybeEdgeType, nodeRef, level) -> {
                 nodeRef.getNode().map(node -> {
                     node.getOutboundEdges().forEach(edge -> {
                         edge.resolveNodeRefs(typeCache);
@@ -60,10 +62,10 @@ public class AntlrImport {
                     return node;
                 });
             });
-            top.preOrderTraverse(
-                    (maybeEdgeType, node, level) ->
-                            System.out.println(nSpaces(level*SPACES_PER_TREE_LEVEL)+ maybeEdgeType.map(Enum::toString).orElse("") + "->" + node.toString())
-            );
+            top.preOrderTraverse(Optional.of(EdgeType.Contains),
+                    (maybeEdgeType, node, level) -> {
+                        System.out.println(nSpaces(level * SPACES_PER_TREE_LEVEL) + maybeEdgeType.map(Enum::toString).orElse("") + "->" + node.toString());
+                    });
         }
     }
 

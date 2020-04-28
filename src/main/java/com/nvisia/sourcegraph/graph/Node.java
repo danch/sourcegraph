@@ -9,6 +9,7 @@ public class Node implements Comparable<Node> {
     private String path;
     private NodeType type;
     private List<Edge> outboundEdges = new ArrayList<>();
+    private List<Edge> inboundEdges = new ArrayList<>();
 
     public Node(String name, String path, NodeType type) {
         this.name = name;
@@ -23,11 +24,12 @@ public class Node implements Comparable<Node> {
         return type.toString()+":"+name;
     }
 
-    public void preOrderTraverse(NodeVisitor visitor) {
+    public void preOrderTraverse(Optional<EdgeType> typeToTraverse, NodeVisitor visitor) {
         var nodeSet = new HashSet<NodeRef>();
-        doPreOrderTraverse(Optional.of(new Edge(NodeRef.of(""), NodeRef.of(this), EdgeType.Contains)), visitor, nodeSet, 0);
+        Node fakeNod = new Node("__root__", "__root__", NodeType.Package);
+        doPreOrderTraverse(typeToTraverse, Optional.of(new Edge(NodeRef.of(fakeNod), NodeRef.of(this), EdgeType.Contains)), visitor, nodeSet, 0);
     }
-    private void doPreOrderTraverse(Optional<Edge> inEdge, NodeVisitor visitor, Set<NodeRef> alreadyVisited, int level) {
+    private void doPreOrderTraverse(Optional<EdgeType> typeToTraverse, Optional<Edge> inEdge, NodeVisitor visitor, Set<NodeRef> alreadyVisited, int level) {
         inEdge.ifPresent(edge -> {
             if (alreadyVisited.contains(edge.getTo())) {
                 return;
@@ -37,8 +39,13 @@ public class Node implements Comparable<Node> {
             for (var childEdge : outboundEdges) {
                 //Hack/workaround for the fact that the post-processing resolution of types (from local to fully qualified) leaves
                 //  edges to nowhere in the case of types outside the system (like java.lang.*)
-                childEdge.getTo().getNode().ifPresentOrElse(node -> node.doPreOrderTraverse(Optional.of(childEdge), visitor, alreadyVisited, level+1),
-                        () -> visitor.visitEdge(Optional.of(childEdge.getType()), childEdge.getTo(), level+1));
+                if (typeToTraverse.map(e -> e.equals(childEdge.getType()) ).orElse(true) ) {
+                    childEdge.getTo().getNode().ifPresentOrElse(
+                            node -> node.doPreOrderTraverse(typeToTraverse, Optional.of(childEdge), visitor, alreadyVisited, level + 1),
+                            () -> visitor.visitEdge(Optional.of(childEdge.getType()), childEdge.getTo(), level + 1) );
+                } else {
+                    visitor.visitEdge(Optional.of(childEdge.getType()), childEdge.getTo(), level + 1);
+                }
             }
         });
     }
@@ -58,8 +65,27 @@ public class Node implements Comparable<Node> {
     public List<Edge> getOutboundEdges() {
         return Collections.unmodifiableList(outboundEdges);
     }
-    public void addOutboundEdge(Edge e) {
+    void addOutboundEdge(Edge e) {
+        if (!e.getFrom().equals(NodeRef.of(this))) {
+            throw new IllegalStateException("add of outbound edge to wrong node");
+        }
         outboundEdges.add(e);
+    }
+    public Edge createOutboundEdge(NodeRef to, EdgeType type) {
+        var edge = new Edge(NodeRef.of(this), to, type);
+        addOutboundEdge(edge);
+        to.getNode().ifPresent(n -> n.addInboundEdge(edge));
+        return edge;
+    }
+
+    public List<Edge> getInboundEdges() {
+        return Collections.unmodifiableList(inboundEdges);
+    }
+    void addInboundEdge(Edge e) {
+        if (!e.getTo().equals(NodeRef.of(this))) {
+            throw new IllegalStateException("add of outbound edge to wrong node");
+        }
+        inboundEdges.add(e);
     }
 
     @Override

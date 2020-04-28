@@ -54,8 +54,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         if (ctx.singleTypeImportDeclaration()!=null) {
             var singleImp = ctx.singleTypeImportDeclaration();
             var typeName = singleImp.typeName().getText();
-            Edge dependency = new Edge(NodeRef.of(containerNodeStack.peek()), NodeRef.of(typeName), EdgeType.DependsOn);
-            containerNodeStack.peek().addOutboundEdge(dependency);
+            containerNodeStack.peek().createOutboundEdge(NodeRef.of(typeName), EdgeType.DependsOn);
         }
         //TODO: other 3 types
     }
@@ -68,8 +67,8 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         var containingNode = containerNodeStack.peek();
         var fqn = containingNode.getName()+"."+className;
         var classNode = new Node(fqn, fqn, NodeType.Type);
-        Edge containment = new Edge(NodeRef.of(containingNode), NodeRef.of(classNode), EdgeType.Contains);
-        containingNode.addOutboundEdge(containment);
+        typeNodes.put(fqn, classNode);
+        containingNode.createOutboundEdge(NodeRef.of(classNode), EdgeType.Contains);
         containerNodeStack.push(classNode);
     }
 
@@ -84,8 +83,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         Node parentNode = containerNodeStack.peek();
         String fqn = parentNode.getName()+"."+name;
         Node myNode = new Node(fqn, fqn, NodeType.Method);
-        Edge containment = new Edge(NodeRef.of(parentNode), NodeRef.of(myNode), EdgeType.Contains);
-        parentNode.addOutboundEdge(containment);
+        parentNode.createOutboundEdge(NodeRef.of(myNode), EdgeType.Contains);
         containerNodeStack.push(myNode);
     }
 
@@ -101,14 +99,12 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         for (var decl : declarations) {
             var id = decl.variableDeclaratorId().identifier().Identifier();
             var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Field);
-            var containsEdge = new Edge(NodeRef.of(containingNode), NodeRef.of(child), EdgeType.Contains);
-            containingNode.addOutboundEdge(containsEdge);
+            containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Contains);
 
             var typeContext = ctx.unannType();
             var typeNodeRef = getTypeNodeRef(typeContext);
             var fieldNodeRef = NodeRef.of(child);
-            var typeOfEdge = new Edge(fieldNodeRef, typeNodeRef, EdgeType.References);
-            child.addOutboundEdge(typeOfEdge);
+            fieldNodeRef.getNode().ifPresent(n -> n.createOutboundEdge(typeNodeRef, EdgeType.References));
         }
 
     }
@@ -132,12 +128,10 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         for (var declarator : ctx.variableDeclaratorList().variableDeclarator()) {
             var id = declarator.variableDeclaratorId().identifier().Identifier();
             var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Variable);
-            var containsEdge = new Edge(NodeRef.of(containingNode), NodeRef.of(child), EdgeType.Contains);
-            containingNode.addOutboundEdge(containsEdge);
+            containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Contains);
 
             var fieldNodeRef = NodeRef.of(child);
-            var typeOfEdge = new Edge(fieldNodeRef, variableType, EdgeType.References);
-            child.addOutboundEdge(typeOfEdge);
+            child.createOutboundEdge(variableType, EdgeType.References);
         }
     }
 }

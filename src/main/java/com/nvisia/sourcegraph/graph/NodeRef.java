@@ -1,5 +1,6 @@
 package com.nvisia.sourcegraph.graph;
 
+import java.util.Objects;
 import java.util.Optional;
 
 public class NodeRef {
@@ -42,5 +43,18 @@ public class NodeRef {
 
     public Optional<Node> getNode() {
         return node;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        NodeRef nodeRef = (NodeRef) o;
+        return Objects.equals(nodePath, nodeRef.nodePath);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(nodePath);
     }
 }

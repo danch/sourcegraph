@@ -109,17 +109,6 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
 
     }
 
-    private NodeRef getTypeNodeRef(Java9Parser.UnannTypeContext typeContext) {
-        var refType = typeContext.unannReferenceType();
-        if (refType != null) {
-            var type = refType.unannClassOrInterfaceType();
-            if (type != null) {
-                var typeName = type.getText();
-                return NodeRef.of(typeName);
-            }
-        }
-        return null;
-    }
 
     @Override
     public void enterLocalVariableDeclaration(Java9Parser.LocalVariableDeclarationContext ctx) {
@@ -133,5 +122,30 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
             var fieldNodeRef = NodeRef.of(child);
             child.createOutboundEdge(variableType, EdgeType.References);
         }
+    }
+
+    @Override
+    public void enterBlock(Java9Parser.BlockContext ctx) {
+        var parent = containerNodeStack.peek();
+        var blockNode = new Node("<block>", "<block>", NodeType.Block);
+        parent.createOutboundEdge(NodeRef.of(blockNode), EdgeType.Contains);
+        containerNodeStack.push(blockNode);
+    }
+
+    @Override
+    public void exitBlock(Java9Parser.BlockContext ctx) {
+        containerNodeStack.pop();
+    }
+
+    private NodeRef getTypeNodeRef(Java9Parser.UnannTypeContext typeContext) {
+        var refType = typeContext.unannReferenceType();
+        if (refType != null) {
+            var type = refType.unannClassOrInterfaceType();
+            if (type != null) {
+                var typeName = type.getText();
+                return NodeRef.of(typeName);
+            }
+        }
+        return null;
     }
 }

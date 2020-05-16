@@ -6,6 +6,7 @@ import static org.hamcrest.CoreMatchers.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class NodeTest {
 
@@ -23,7 +24,7 @@ public class NodeTest {
         visitCounts.put("a", 0);
         visitCounts.put("b", 0);
         visitCounts.put("c", 0);
-        a.preOrderTraverse((maybeEdgeType, nodeRef, level) -> {
+        a.preOrderTraverse(Optional.empty(), (maybeEdgeType, nodeRef, level) -> {
             String name = nodeRef.getNode().map(Node::getName).orElse("");
             Integer oldValue = visitCounts.get(name);
             Integer newValue = oldValue+1;

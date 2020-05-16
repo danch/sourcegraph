@@ -92,4 +92,11 @@ public class Node implements Comparable<Node> {
     public int compareTo(Node o) {
         return this.toString().compareTo(o.toString());
     }
+
+    public void clearOutboundEdges() {
+        for (var edge : outboundEdges) {
+            edge.clear();
+        }
+        outboundEdges = new ArrayList<>();
+    }
 }

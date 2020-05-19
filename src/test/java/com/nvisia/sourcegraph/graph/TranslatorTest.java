@@ -5,11 +5,14 @@ import org.antlr.v4.runtime.CharStreams;
 import static org.junit.Assert.*;
 import org.junit.Test;
 
+import java.util.Optional;
+
 public class TranslatorTest {
     private final String ENHANCED_FOR_LOOP =
-            "class T {" +
+            "package graphtest;" +
+            "class ForLoopingType {" +
             "public static void featureTest() {" +
-                "List<String> list;" +
+                "List<String> dummyList;" +
                 "for (String s: list) " +
                 "    System.out.println(s);" +
             "}"+
@@ -17,28 +20,26 @@ public class TranslatorTest {
     @Test
     public void testForLoop() {
         var imp = importString(ENHANCED_FOR_LOOP);
-        imp.textDumpContainsGraph();
+        System.out.println(imp.toDOT());
         var topLevel = imp.getTopLevelNodes();
         assertEquals(1, topLevel.size());
         var topNode = topLevel.iterator().next();
-        assertEquals(NodeType.Type, topNode.getType());
+        assertEquals(NodeType.Package, topNode.getType());
 
-        var method = getMethodNode(topNode, "featureTest");
-        assertNotNull(method);
+//        var method = getMethodNode(topNode, "featureTest");
+//        assertNotNull(method);
 
 
 
     }
 
     private Node getMethodNode(Node type, String methodName) {
-        for (var edge : type.getOutboundEdges()) {
-            if (edge.getTo().isResolved()) {
-                var node = edge.getTo().getNode().get();
-                if (node.getType().equals(NodeType.Method)) {
-                    if (node.getName().equals(methodName)) {
-                        return node;
-                    }
-                }
+        var methods = type.findOutboundEdgesToNodeType(NodeType.Method);
+        for (var methodEdge : methods) {
+            String actualName = methodEdge.getTo().getNode().map(node -> node.getName()).get();
+
+            if (actualName.equals(methodName)) {
+                return methodEdge.getTo().getNode().get();
             }
         }
         return null;

@@ -12,7 +12,10 @@ public class Scope {
     private boolean isMethod;
     private Node blockNode;
     private LinkedList<NodeRef> linearExecution = new LinkedList<>();
-    private List<NodeRef> forwardReturns = new ArrayList<>();//noderefs that need to be tied to the exit of the scope as an execute (return paths)
+    //noderefs that need to be tied to the exit of the scope as an execute (return paths)
+    private List<NodeRef> pendingLoopExits = new ArrayList<>();
+    //noderefs that need to be passed to the forward returns of the enclosing scope for fix up of loo;
+    private List<NodeRef> currentLoopContinuations = new ArrayList<>();
 
     public Scope(Node blockNode, boolean isMethod) {
         this.isMethod = isMethod;
@@ -23,11 +26,17 @@ public class Scope {
         return blockNode;
     }
 
-    public void addForwardReturn(NodeRef returnFrom) {
-        forwardReturns.add(returnFrom);
+    public void addPendingLoopExit(NodeRef returnFrom) {
+        pendingLoopExits.add(returnFrom);
     }
-    public List<NodeRef> getForwardReturns() {
-        return forwardReturns;
+    public List<NodeRef> getPendingLoopExits() {
+        return pendingLoopExits;
+    }
+    public void addCurrentLoopContinuation(NodeRef continuation) {
+        currentLoopContinuations.add(continuation);
+    }
+    public List<NodeRef> getCurrentLoopContinuations() {
+        return currentLoopContinuations;
     }
 
     public void addLinearExecution(NodeRef executed) {
@@ -40,14 +49,18 @@ public class Scope {
         linearExecution.addLast(executed);
 
         //check for pending returns from conditional/looping blocks
-        for (var nodeRef : forwardReturns) {
+        for (var nodeRef : pendingLoopExits) {
             nodeRef.getNode().ifPresentOrElse(node -> node.createOutboundEdge(executed, EdgeType.Executes),
                     () -> {throw new IllegalStateException("resolved for node is required to fixup dangling loops/conditionals");});
-            forwardReturns = new ArrayList<>();
+            pendingLoopExits = new ArrayList<>();
         }
     }
 
     public LinkedList<NodeRef> getLinearExecution() {
         return linearExecution;
+    }
+
+    public boolean isMethod() {
+        return isMethod;
     }
 }

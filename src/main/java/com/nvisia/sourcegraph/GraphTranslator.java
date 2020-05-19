@@ -102,7 +102,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void enterMethodDeclaration(Java9Parser.MethodDeclarationContext ctx) {
         String methodName = ctx.methodHeader().methodDeclarator().identifier().Identifier().toString();
         Node parentNode = containerNodeStack.peek();
-        String fqn = parentNode.getName()+"."+methodName;
+        String fqn = parentNode.getPath()+"."+methodName;
 
         Node methodNode = new Node(methodName, fqn, NodeType.Method);
         parentNode.createOutboundEdge(NodeRef.of(methodNode), EdgeType.Contains);
@@ -121,7 +121,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         var containingNode = containerNodeStack.peek();
         for (var decl : declarations) {
             var id = decl.variableDeclaratorId().identifier().Identifier();
-            var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Field);
+            var child = new Node(id.getSymbol().getText(), buildStandardPath(containingNode, id.getSymbol().getText()), NodeType.Field);
             containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Contains);
 
             var typeContext = ctx.unannType();
@@ -138,7 +138,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         var containingNode = containerNodeStack.peek();
         for (var declarator : ctx.variableDeclaratorList().variableDeclarator()) {
             var id = declarator.variableDeclaratorId().identifier().Identifier();
-            var child = new Node(id.getSymbol().getText(), id.getSymbol().getText(), NodeType.Variable);
+            var child = new Node(id.getSymbol().getText(), buildStandardPath(containingNode, id.getSymbol().getText()), NodeType.Variable);
             containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Contains);
 
             child.createOutboundEdge(variableType, EdgeType.References);
@@ -158,7 +158,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     @Override
     public void enterBlock(Java9Parser.BlockContext ctx) {
         var parent = containerNodeStack.peek();
-        var blockNode = new Node("<block>", ctx.toString(), NodeType.Block);
+        var blockNode = new Node("<block>", buildStandardPath(parent, "<block>"+ctx.toString().hashCode()), NodeType.Block);
         parent.createOutboundEdge(NodeRef.of(blockNode), EdgeType.Contains);
         containerNodeStack.push(blockNode);
         scopeStack.push(new Scope(blockNode, parent.getType() == NodeType.Method));
@@ -170,14 +170,14 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     @Override
     public void exitBlock(Java9Parser.BlockContext ctx) {
         containerNodeStack.pop();
-
+        exitScope();
     }
 
 
     @Override
     public void enterConstructorBody(Java9Parser.ConstructorBodyContext ctx) {
         var parent = containerNodeStack.peek();
-        var blockNode = new Node("<block>", ctx.toString(), NodeType.Block);
+        var blockNode = new Node("<block>", parent.getPath()+ctx.toString().hashCode(), NodeType.Block);
         parent.createOutboundEdge(NodeRef.of(blockNode), EdgeType.Contains);
         containerNodeStack.push(blockNode);
         scopeStack.push(new Scope(blockNode, false));
@@ -200,9 +200,8 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void enterExpressionStatement(Java9Parser.ExpressionStatementContext ctx) {
         var containingNode = containerNodeStack.peek();
         var name = ctx.getText();
-        var path = containingNode.getPath()+":"+name;
+        var path = containingNode.getPath()+":"+name.hashCode();
         var node = new Node(name, path, NodeType.Statement);
-        containingNode.createOutboundEdge(NodeRef.of(node), EdgeType.Contains);
 
         addStatementNode(node);
     }
@@ -216,9 +215,8 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     @Override
     public void enterEnhancedForStatement(Java9Parser.EnhancedForStatementContext ctx) {
         var parent = containerNodeStack.peek();
-        var forNode = new Node(FOR_LOOP_NAME , ctx.toString(), NodeType.Loop);
+        var forNode = new Node(FOR_LOOP_NAME , buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Loop);
         containerNodeStack.push(forNode);
-        parent.createOutboundEdge(NodeRef.of(forNode), EdgeType.Contains);
 
         addStatementNode(forNode);
 
@@ -235,16 +233,15 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void exitEnhancedForStatement(Java9Parser.EnhancedForStatementContext ctx) {
         if (scopeStack.peek().getBlockNode().getName().equals(FOR_LOOP_NAME)) {
             //if the top scope is our synthetic block, we need to pull out its liinears as ours
-            var scope = scopeStack.pop();
+            var scope = scopeStack.peek();
             var forNode = scope.getBlockNode();
             var linear = scope.getLinearExecution();
-
-            //linears are already checked, just need to tie them in
-            forNode.createOutboundEdge(linear.getFirst(), EdgeType.Executes);
             //we'll need an execute ('return') from the for loop to the next node entered into the block
-            scopeStack.peek().addForwardReturn(NodeRef.of(forNode));
+            scope.addCurrentLoopContinuation(NodeRef.of(forNode));
             //likewise the linears within the for loop.
-            scopeStack.peek().addForwardReturn(linear.getLast());
+            scope.addCurrentLoopContinuation(linear.getLast());
+
+            exitScope();
         }
         //Note: if there was a real block in the for, it took care of itself
         //we pop the for container
@@ -270,5 +267,35 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
             return NodeRef.of(name);
         }
         return null;
+    }
+
+    //precondition: scope's block node has been popped from containerStack
+    private void exitScope() {
+        var scope = scopeStack.pop();
+        var block = scope.getBlockNode();
+        var linear = scope.getLinearExecution();
+        //linears are already checked, just need to tie them in
+        block.createOutboundEdge(linear.getFirst(), EdgeType.Executes);
+        //pass current continuations to pending
+        if (scope.isMethod()) {
+            var methodNode = containerNodeStack.peek();
+            if (methodNode.getType()!=NodeType.Method) {
+                throw new IllegalStateException("Block marked method has non-method parent, or precondition of exitScope not met");
+            }
+
+            //TODO: this really should only happen for void methods, add check
+            for (var exit : scope.getPendingLoopExits()) {
+                exit.getNode().get().createOutboundEdge(NodeRef.of(methodNode), EdgeType.Executes);
+            }
+        } else {
+            var containingScope = scopeStack.peek();
+            for (var exit : scope.getCurrentLoopContinuations()) {
+                containingScope.addPendingLoopExit(exit);
+            }
+        }
+    }
+
+    private static String buildStandardPath(Node parent, String childName) {
+        return parent.getPath()+":"+childName;
     }
 }

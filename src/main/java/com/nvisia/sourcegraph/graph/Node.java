@@ -50,6 +50,24 @@ public class Node implements Comparable<Node> {
         });
     }
 
+    public void preOrderEdgeTraverse(Optional<EdgeType> typeToTraverse, Consumer<Edge> visitor) {
+        var nodeSet = new HashSet<Node>();
+        Node fakeNod = new Node("__root__", "__root__", NodeType.Package);
+        doPreOrderEdgeTraverse(typeToTraverse, visitor, nodeSet);
+    }
+    private void doPreOrderEdgeTraverse(Optional<EdgeType> typeToTraverse, Consumer<Edge> visitor, Set<Node> alreadyVisited) {
+        if (alreadyVisited.contains(this)) {
+            return;
+        }
+        alreadyVisited.add(this);
+        for (var edge : outboundEdges) {
+            if (typeToTraverse.map(e -> e.equals(edge.getType()) ).orElse(true) ) {
+                visitor.accept(edge);
+                edge.getTo().getNode().ifPresent(child -> child.doPreOrderEdgeTraverse(typeToTraverse, visitor, alreadyVisited));
+            }
+        };
+    }
+
     public String getName() {
         return name;
     }
@@ -77,6 +95,25 @@ public class Node implements Comparable<Node> {
         to.getNode().ifPresent(n -> n.addInboundEdge(edge));
         return edge;
     }
+    public Collection<Edge> findOutboundEdgesOfType(EdgeType type) {
+        var list = new ArrayList<Edge>();
+        for (var edge : outboundEdges) {
+            if (edge.getType()==type) {
+                list.add(edge);
+            }
+        }
+        return list;
+    }
+    public Collection<Edge> findOutboundEdgesToNodeType(NodeType type) {
+        var list = new ArrayList<Edge>();
+        for (var edge : outboundEdges) {
+            if (edge.getTo().getNode().map(node -> node.getType())
+                                           .or(() -> Optional.of(NodeType.Unknown)).get() == type) {
+                list.add(edge);
+            }
+        }
+        return list;
+    }
 
     public List<Edge> getInboundEdges() {
         return Collections.unmodifiableList(inboundEdges);
@@ -90,6 +127,17 @@ public class Node implements Comparable<Node> {
 
     @Override
     public int compareTo(Node o) {
-        return this.toString().compareTo(o.toString());
+        return this.getPath().compareTo(o.getPath());
+    }
+
+    public void clearOutboundEdges() {
+        for (var edge : outboundEdges) {
+            edge.clear();
+        }
+        outboundEdges = new ArrayList<>();
+    }
+
+    public boolean isLeaf() {
+        return outboundEdges.isEmpty();
     }
 }

@@ -35,9 +35,13 @@ public class Edge {
             if (actualNode == null && !to.getNodePath().contains(".")) {
                 //not fully qualified, look in current package
                 Node packageNode = findNearestPackage(from.getNode().get());
-                var packageName = packageNode.getName();
-                var fqn = packageName + "." + to.getNodePath();
-                actualNode = typeCache.get(fqn);
+                if (packageNode != null) {
+                    var packageName = packageNode.getName();
+                    var fqn = packageName + "." + to.getNodePath();
+                    actualNode = typeCache.get(fqn);
+                } else {
+                    actualNode = typeCache.get(to.getNodePath());
+                }
                 //TODO imports
             }
             to.resolveWith(actualNode);
@@ -58,5 +62,10 @@ public class Edge {
             }
         }
         return null;//actually an invalid state
+    }
+
+    public void clear() {
+        to = null;
+        from = null;
     }
 }

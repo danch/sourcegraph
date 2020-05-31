@@ -155,13 +155,18 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void exitLocalVariableDeclaration( Java9Parser.LocalVariableDeclarationContext ctx) {
     }
 
+    public static final String BLOCK_NAME = "<block>";
     @Override
     public void enterBlock(Java9Parser.BlockContext ctx) {
         var parent = containerNodeStack.peek();
-        var blockNode = new Node("<block>", buildStandardPath(parent, "<block>"+ctx.toString().hashCode()), NodeType.Block);
+        var blockNode = new Node(BLOCK_NAME, buildStandardPath(parent, "<block>"+ctx.toString().hashCode()), NodeType.Block);
         parent.createOutboundEdge(NodeRef.of(blockNode), EdgeType.Contains);
         containerNodeStack.push(blockNode);
+        if (!scopeStack.empty()) {
+            addStatementNode(blockNode);
+        }
         scopeStack.push(new Scope(blockNode, parent.getType() == NodeType.Method));
+
         if (parent.getType() == NodeType.Method) {
             parent.createOutboundEdge(NodeRef.of(blockNode), EdgeType.Executes);
         }
@@ -170,6 +175,12 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     @Override
     public void exitBlock(Java9Parser.BlockContext ctx) {
         containerNodeStack.pop();
+
+        var scope = scopeStack.peek();
+        var linear = scope.getLinearExecution();
+        //likewise the linears within the for loop.
+        scope.addCurrentLoopContinuation(linear.getLast());
+
         exitScope();
     }
 
@@ -210,8 +221,8 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void exitExpressionStatement(Java9Parser.ExpressionStatementContext ctx) {
     }
 
-    private static String SYNTHETIC_BLOCK_NAME = "syntheticblock";
-    private static String FOR_LOOP_NAME = "<for>";
+    public static String SYNTHETIC_BLOCK_NAME = "syntheticblock";
+    public static String FOR_LOOP_NAME = "<for>";
     @Override
     public void enterEnhancedForStatement(Java9Parser.EnhancedForStatementContext ctx) {
         var parent = containerNodeStack.peek();
@@ -231,10 +242,10 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     }
     @Override
     public void exitEnhancedForStatement(Java9Parser.EnhancedForStatementContext ctx) {
+        //we pop the for container
+        var forNode = containerNodeStack.pop();
+        var scope = scopeStack.peek();
         if (scopeStack.peek().getBlockNode().getName().equals(FOR_LOOP_NAME)) {
-            //if the top scope is our synthetic block, we need to pull out its liinears as ours
-            var scope = scopeStack.peek();
-            var forNode = scope.getBlockNode();
             var linear = scope.getLinearExecution();
             //we'll need an execute ('return') from the for loop to the next node entered into the block
             scope.addCurrentLoopContinuation(NodeRef.of(forNode));
@@ -242,10 +253,10 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
             scope.addCurrentLoopContinuation(linear.getLast());
 
             exitScope();
+        } else {
+            scope.addPendingLoopExit(NodeRef.of(forNode));
         }
         //Note: if there was a real block in the for, it took care of itself
-        //we pop the for container
-        containerNodeStack.pop();
     }
 
     private NodeRef getTypeNodeRef(Java9Parser.UnannTypeContext typeContext) {

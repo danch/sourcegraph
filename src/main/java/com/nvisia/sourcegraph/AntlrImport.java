@@ -79,7 +79,7 @@ public class AntlrImport {
     /* TODO this sort of functionality really needs a different home
     *   Also: Can't wait to feed this thing to itself: If this doesn't have a high CCN, we have a problem.
     *   TODO: fix and remove the above note. */
-    public String toDOT() {
+    public String toDOT(Set<EdgeType> edgeTypesToSkip) {
         var stringWriter = new StringWriter();
         var writer = new java.io.PrintWriter(stringWriter);
         writer.println("digraph danch_o_graph {");
@@ -89,13 +89,15 @@ public class AntlrImport {
                     edge.getFrom().getNode().ifPresentOrElse(
                             node -> AntlrImport.emitNodeDescription(node, visitedPaths, writer)
                     , () -> {
-                        int bpFodder = 0;
+                        System.err.println("Found a 'from' node that isn't resolved!");
                     });
                     edge.getTo().getNode().ifPresentOrElse(
                             node -> AntlrImport.emitNodeDescription(node, visitedPaths, writer),
                             () -> emitStubDescription(edge.getTo().getNodePath(), visitedPaths, writer)
                     );
-                    writer.println("\"" + edge.getFrom().getNodePath() + "\"" + "->" + "\"" + edge.getTo().getNodePath() + "\"" + " [label=\"" + edge.getType().toString() + "\"];");
+                    if (!edgeTypesToSkip.contains(edge.getType())) {
+                        writer.println("\"" + edge.getFrom().getNodePath() + "\"" + "->" + "\"" + edge.getTo().getNodePath() + "\"" + " [label=\"" + edge.getType().toString() + "\"];");
+                    }
                 }
         );
         writer.println("}");

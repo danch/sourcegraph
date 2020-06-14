@@ -136,23 +136,34 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void enterLocalVariableDeclaration(Java9Parser.LocalVariableDeclarationContext ctx) {
         NodeRef variableType = getTypeNodeRef(ctx.unannType());
         var containingNode = containerNodeStack.peek();
-        for (var declarator : ctx.variableDeclaratorList().variableDeclarator()) {
-            var id = declarator.variableDeclaratorId().identifier().Identifier();
-            var child = new Node(id.getSymbol().getText(), buildStandardPath(containingNode, id.getSymbol().getText()), NodeType.Variable);
-            containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Contains);
-
-            child.createOutboundEdge(variableType, EdgeType.References);
-
-            var initializer = declarator.variableInitializer();
-            if (initializer!=null) {
-                //if there's an initializer, the declaration is also treated as a statement
-                addStatementNode(child);
-            }
-        }
+        var child = new Node("var", buildStandardPath(containingNode, "var"+ctx.toString().hashCode()), NodeType.Variable);
+        containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Declares);
+        child.createOutboundEdge(variableType, EdgeType.References);
+        addExpressionToStack(child);
+        containerNodeStack.push(child);
+    }
+    @Override public void exitLocalVariableDeclaration( Java9Parser.LocalVariableDeclarationContext ctx) {
+        containerNodeStack.pop();
+        expressionStack.pop();
     }
 
     @Override
-    public void exitLocalVariableDeclaration( Java9Parser.LocalVariableDeclarationContext ctx) {
+    public void enterVariableDeclarator(Java9Parser.VariableDeclaratorContext declarator) {
+        var containingNode = containerNodeStack.peek();
+        var id = declarator.variableDeclaratorId().identifier().Identifier();
+        var child = new Node(id.getSymbol().getText(), buildStandardPath(containingNode, id.getSymbol().getText()), NodeType.Variable);
+        containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Declares);
+    }
+
+
+    @Override public void enterAssignment(Java9Parser.AssignmentContext ctx) {
+        var containingNode = containerNodeStack.peek();
+        String name = ctx.assignmentOperator().getText();
+        Node assignmentRoot = new Node(name, buildStandardPath(containingNode, name+ctx.toString().hashCode()), NodeType.Expression);
+        addExpressionToStack(assignmentRoot);
+    }
+    @Override public void exitAssignment(Java9Parser.AssignmentContext ctx) {
+        expressionStack.pop();
     }
 
     public static final String BLOCK_NAME = "<block>";
@@ -215,10 +226,12 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         var node = new Node(name, path, NodeType.Statement);
 
         addStatementNode(node);
+        addExpressionToStack(node);
     }
 
     @Override
     public void exitExpressionStatement(Java9Parser.ExpressionStatementContext ctx) {
+        expressionStack.pop();
     }
 
     public static String SYNTHETIC_BLOCK_NAME = "syntheticblock";
@@ -257,6 +270,179 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
             scope.addPendingLoopExit(NodeRef.of(forNode));
         }
         //Note: if there was a real block in the for, it took care of itself
+    }
+
+    private Stack<Node> expressionStack = new Stack<>();
+    @Override public void enterBasicForStatement(Java9Parser.BasicForStatementContext ctx) {
+        var parent = containerNodeStack.peek();
+        var forNode = new Node(FOR_LOOP_NAME , buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Loop);
+        containerNodeStack.push(forNode);
+
+        addStatementNode(forNode);
+        expressionStack.push(forNode);
+
+        var blockStatement = ctx.statement().statementWithoutTrailingSubstatement().block();
+        if (blockStatement==null) {
+            //use the for node as a fake scope
+            scopeStack.push(new Scope(forNode, false));
+        }
+    }
+
+    @Override public void exitBasicForStatement(Java9Parser.BasicForStatementContext ctx) {
+        //we pop the for container
+        var forNode = containerNodeStack.pop();
+        var scope = scopeStack.peek();
+        if (scopeStack.peek().getBlockNode().getName().equals(FOR_LOOP_NAME)) {
+            var linear = scope.getLinearExecution();
+            //we'll need an execute ('return') from the for loop to the next node entered into the block
+            scope.addCurrentLoopContinuation(NodeRef.of(forNode));
+            //likewise the linears within the for loop.
+            scope.addCurrentLoopContinuation(linear.getLast());
+
+            exitScope();
+        } else {
+            scope.addPendingLoopExit(NodeRef.of(forNode));
+        }
+        expressionStack.pop();
+    }
+
+    @Override public void enterConditionalExpression(Java9Parser.ConditionalExpressionContext ctx) {
+        var q = ctx.QUESTION();
+        if (q!=null) {
+            //TODO: trinary operator
+        }
+    }
+
+    @Override public void enterConditionalOrExpression(Java9Parser.ConditionalOrExpressionContext ctx) {
+        var or = ctx.OR();
+        if (or != null) {
+            //TODO: logical or expression
+        }
+    }
+
+    @Override public void enterConditionalAndExpression(Java9Parser.ConditionalAndExpressionContext ctx) {
+        var and = ctx.AND();
+        if (and != null) {
+            //TODO: logical and expression
+        }
+    }
+
+    @Override public void enterEqualityExpression(Java9Parser.EqualityExpressionContext ctx) {
+        if (ctx.EQUAL()!=null || ctx.NOTEQUAL()!=null) { //How's that for meta?
+            String name = (ctx.EQUAL() != null ? ctx.EQUAL().getSymbol() : ctx.NOTEQUAL().getSymbol()).getText();
+            var parent = containerNodeStack.peek();
+            Node equalityNode = new Node(name, buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Expression);
+        }
+    }
+
+    @Override public void enterRelationalExpression(Java9Parser.RelationalExpressionContext ctx) {
+        String operator = getRelationalOperator(ctx);
+        if (operator != null) {
+            var parent = containerNodeStack.peek();
+            Node relationalNode = new Node(operator, buildStandardPath(parent, operator+ctx.toString().hashCode()), NodeType.Expression);
+            addExpressionToStack(relationalNode);
+        }
+    }
+
+    private void addExpressionToStack(Node expressionNode) {
+        if (!expressionStack.empty() && expressionStack.peek()!=null) {
+            var fork = expressionStack.peek();
+            fork.createOutboundEdge(NodeRef.of(expressionNode), EdgeType.Evaluates);
+        }
+        expressionStack.push(expressionNode);
+    }
+
+    @Override public void exitRelationalExpression(Java9Parser.RelationalExpressionContext ctx) {
+        String operator = getRelationalOperator(ctx);
+        if (operator != null) {
+            expressionStack.pop();
+        }
+    }
+
+    @Override public void enterExpressionName(Java9Parser.ExpressionNameContext ctx) {
+        if (ctx.identifier()!=null) {
+            String name = ctx.identifier().getText();
+            var parent = containerNodeStack.peek();
+            Node relationalNode = new Node(name, buildStandardPath(parent, name+ctx.toString().hashCode()), NodeType.Expression);
+            addExpressionToStack(relationalNode);
+        }
+        if (ctx.ambiguousName()!=null) {
+            String name = ctx.ambiguousName().getText();
+            var parent = containerNodeStack.peek();
+            Node relationalNode = new Node(name, buildStandardPath(parent, name+ctx.toString().hashCode()), NodeType.Expression);
+            addExpressionToStack(relationalNode);
+        }
+    }
+
+    @Override public void exitExpressionName(Java9Parser.ExpressionNameContext ctx) {
+        if (ctx.identifier()!=null || ctx.ambiguousName()!=null) {
+            expressionStack.pop();
+        }
+    }
+
+    @Override public void enterMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
+        String name = ctx.identifier().getText();
+        var parent = containerNodeStack.peek();
+        Node relationalNode = new Node(name, buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Expression);
+        addExpressionToStack(relationalNode);
+    }
+
+    @Override public void exitMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
+        expressionStack.pop();
+    }
+
+    @Override public void enterMethodInvocation_lfno_primary(Java9Parser.MethodInvocation_lfno_primaryContext ctx) {
+        String objectName = ctx.typeName().getText();
+        String name = ctx.identifier().getText();
+        var parent = containerNodeStack.peek();
+        Node relationalNode = new Node(ctx.getText(), buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Expression);
+        addExpressionToStack(relationalNode);
+    }
+
+    @Override public void exitMethodInvocation_lfno_primary(Java9Parser.MethodInvocation_lfno_primaryContext ctx) {
+        expressionStack.pop();
+    }
+
+    @Override
+    public void enterPostfixExpression(Java9Parser.PostfixExpressionContext ctx) {
+        var thing1 = ctx.postDecrementExpression_lf_postfixExpression();
+        var thing2 = ctx.postIncrementExpression_lf_postfixExpression();
+        var name = ctx.expressionName();
+        var primatey = ctx.primary();
+        String operator = ctx.getText();
+    }
+    @Override public void exitPostfixExpression(Java9Parser.PostfixExpressionContext ctx) {
+
+    }
+
+    @Override public void enterPostIncrementExpression(Java9Parser.PostIncrementExpressionContext ctx) {
+        var operator = ctx.INC().getText();
+        var parent = containerNodeStack.peek();
+        Node operatorNode = new Node(operator, buildStandardPath(parent, operator+ctx.toString().hashCode()), NodeType.Expression);
+        addExpressionToStack(operatorNode);
+    }
+
+    @Override public void exitPostIncrementExpression(Java9Parser.PostIncrementExpressionContext ctx) {
+        expressionStack.pop();
+    }
+
+    private static String getRelationalOperator(Java9Parser.RelationalExpressionContext ctx) {
+        if (ctx.GT() != null) {
+            return ctx.GT().getSymbol().getText();
+        }
+        if (ctx.LT() != null) {
+            return ctx.LT().getSymbol().getText();
+        }
+        if (ctx.GE() != null) {
+            return ctx.GE().getSymbol().getText();
+        }
+        if (ctx.LE() != null) {
+            return ctx.LE().getSymbol().getText();
+        }
+        if (ctx.INSTANCEOF() != null) {
+            return ctx.INSTANCEOF().getSymbol().getText();
+        }
+        return null;
     }
 
     private NodeRef getTypeNodeRef(Java9Parser.UnannTypeContext typeContext) {

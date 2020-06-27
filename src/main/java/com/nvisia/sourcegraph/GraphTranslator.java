@@ -136,7 +136,7 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
     public void enterLocalVariableDeclaration(Java9Parser.LocalVariableDeclarationContext ctx) {
         NodeRef variableType = getTypeNodeRef(ctx.unannType());
         var containingNode = containerNodeStack.peek();
-        var child = new Node("var", buildStandardPath(containingNode, "var"+ctx.toString().hashCode()), NodeType.Variable);
+        var child = new Node("decl", buildStandardPath(containingNode, "decl"+ctx.toString().hashCode()), NodeType.Declaration);
         containingNode.createOutboundEdge(NodeRef.of(child), EdgeType.Declares);
         child.createOutboundEdge(variableType, EdgeType.References);
         addExpressionToStack(child);
@@ -380,26 +380,79 @@ public class GraphTranslator extends com.nvisia.sourcegraph.antlr.Java9BaseListe
         }
     }
 
-    @Override public void enterMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
+    @Override public void enterMethodInvocation(Java9Parser.MethodInvocationContext ctx) {
         String name = ctx.identifier().getText();
         var parent = containerNodeStack.peek();
-        Node relationalNode = new Node(name, buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Expression);
+        Node relationalNode = new Node(name, buildStandardPath(parent, name + ctx.toString().hashCode()), NodeType.Expression);
+/* TODO: scope search within 'this'
+        var variable = findVariableWithName(parent, objectName);
+        if (variable != null) {
+            relationalNode.createOutboundEdge(NodeRef.of(variable), EdgeType.References);
+        }
+*/
         addExpressionToStack(relationalNode);
     }
 
-    @Override public void exitMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
+    @Override public void exitMethodInvocation(Java9Parser.MethodInvocationContext ctx) {
         expressionStack.pop();
     }
 
     @Override public void enterMethodInvocation_lfno_primary(Java9Parser.MethodInvocation_lfno_primaryContext ctx) {
         String objectName = ctx.typeName().getText();
-        String name = ctx.identifier().getText();
+        String name = objectName + "." + ctx.identifier().getText();
         var parent = containerNodeStack.peek();
-        Node relationalNode = new Node(ctx.getText(), buildStandardPath(parent, "<for>"+ctx.toString().hashCode()), NodeType.Expression);
+        Node relationalNode = new Node(ctx.getText(), buildStandardPath(parent, name+ctx.toString().hashCode()), NodeType.Expression);
+
+        var variable = findVariableWithName(parent, objectName);
+        if (variable != null) {
+            relationalNode.createOutboundEdge(NodeRef.of(variable), EdgeType.References);
+        }
+
         addExpressionToStack(relationalNode);
     }
 
+    private Node findVariableWithName(Node parent, String objectName) {
+        var declarations = parent.findOutboundEdgesOfType(EdgeType.Declares);
+        for (var declaration : declarations) {
+            if (declaration.getTo().isResolved()) {
+                var variables = declaration.getTo().getNode().get().findOutboundEdgesOfType(EdgeType.Declares);
+
+                for (var variable : variables) {
+                    var nodeName = variable.getTo().getNode().map(n -> n.getName()).get();
+                    if (nodeName.equals(objectName)) {
+                        return variable.getTo().getNode().get();
+                    }
+                }
+            }
+        }
+        var parentEdges = parent.findInboundEdgesOfType(EdgeType.Contains);
+        if (parentEdges.size()==1) {
+            var myParent = parentEdges.iterator().next().getFrom().getNode().get();
+            return findVariableWithName(myParent, objectName);
+        }
+        //TODO: WARN if parentEdges.size() > 1
+        return null;
+    }
+
     @Override public void exitMethodInvocation_lfno_primary(Java9Parser.MethodInvocation_lfno_primaryContext ctx) {
+        expressionStack.pop();
+    }
+
+    @Override public void enterMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
+
+        String name = ctx.identifier().getText();
+        var parent = containerNodeStack.peek();
+        Node relationalNode = new Node(ctx.getText(), buildStandardPath(parent, name+ctx.toString().hashCode()), NodeType.Expression);
+        /*
+        var variable = findVariableWithName(parent, objectName);
+        if (variable != null) {
+            relationalNode.createOutboundEdge(NodeRef.of(variable), EdgeType.References);
+        }
+*/
+        addExpressionToStack(relationalNode);
+    }
+
+    @Override public void exitMethodInvocation_lf_primary(Java9Parser.MethodInvocation_lf_primaryContext ctx) {
         expressionStack.pop();
     }
 

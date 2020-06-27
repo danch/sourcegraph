@@ -124,6 +124,15 @@ public class Node implements Comparable<Node> {
         }
         inboundEdges.add(e);
     }
+    public Collection<Edge> findInboundEdgesOfType(EdgeType type) {
+        var list = new ArrayList<Edge>();
+        for (var edge : inboundEdges) {
+            if (edge.getType()==type) {
+                list.add(edge);
+            }
+        }
+        return list;
+    }
 
     @Override
     public int compareTo(Node o) {
